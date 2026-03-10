@@ -1,0 +1,180 @@
+{
+  "project": {
+    "key": "DEMO",
+    "name": "Demo Application",
+    "description": "Demo project for bug triage with GitHub Copilot SDK",
+    "projectTypeKey": "software",
+    "leadAccountId": ""
+  },
+  "issueTypes": ["Bug", "Task", "Story"],
+  "bugs": [
+    {
+      "summary": "NullPointerException in UserAuthenticationService.authenticate()",
+      "description": "Users are encountering a NullPointerException when attempting to log in. The error occurs in UserAuthenticationService.authenticate() at line 142. Stack trace shows the user session object is null when the token validation succeeds but the session cache has expired.\n\nSteps to reproduce:\n1. Log in with valid credentials\n2. Wait for session to expire (30 min)\n3. Attempt any authenticated action\n4. Login redirect triggers the NPE\n\nImpact: ~200 users affected per day",
+      "priority": "High",
+      "labels": ["authentication", "backend", "crash"],
+      "components": ["Auth Service"]
+    },
+    {
+      "summary": "Memory leak in WebSocket connection handler",
+      "description": "The WebSocket connection handler in the real-time notification service is not properly cleaning up closed connections. Memory usage increases by ~50MB per hour under normal load. After 24 hours, the service OOMs and restarts.\n\nRoot cause appears to be in ConnectionPool.removeConnection() where event listeners are not being detached before removing the connection reference.\n\nMonitoring alert: avg memory usage > 2GB threshold",
+      "priority": "Critical",
+      "labels": ["memory-leak", "websocket", "backend"],
+      "components": ["Notification Service"]
+    },
+    {
+      "summary": "API rate limiter returns 500 instead of 429 when Redis is unavailable",
+      "description": "When the Redis instance backing the API rate limiter goes down, the rate limiting middleware throws an unhandled exception and returns HTTP 500 instead of gracefully degrading or returning HTTP 429.\n\nThis was discovered during a Redis failover event on 2024-03-01. All API requests returned 500 for approximately 3 minutes.\n\nExpected behavior: Fall back to in-memory rate limiting or allow requests through with a warning log.",
+      "priority": "High",
+      "labels": ["api", "redis", "error-handling"],
+      "components": ["API Gateway"]
+    },
+    {
+      "summary": "Dashboard charts not rendering on Safari 17.x",
+      "description": "The analytics dashboard charts (built with D3.js) fail to render on Safari 17.x. The SVG elements are created but the paths are not drawn. Console shows 'TypeError: Cannot read properties of undefined (reading transform)' in chart-renderer.js.\n\nAffects: Safari 17.0, 17.1, 17.2 on macOS Sonoma\nWorks fine on: Chrome, Firefox, Edge, Safari 16.x",
+      "priority": "Medium",
+      "labels": ["ui", "safari", "charts", "frontend"],
+      "components": ["Dashboard"]
+    },
+    {
+      "summary": "SQL injection vulnerability in search endpoint",
+      "description": "The /api/v2/search endpoint does not properly sanitize the 'query' parameter before passing it to the database query builder. A crafted search query can execute arbitrary SQL.\n\nPOC: GET /api/v2/search?query='; DROP TABLE users; --\n\nThis is a CRITICAL security vulnerability that needs immediate attention. The endpoint is publicly accessible without authentication.",
+      "priority": "Critical",
+      "labels": ["security", "sql-injection", "api"],
+      "components": ["Search Service"]
+    },
+    {
+      "summary": "File upload fails silently for files > 10MB",
+      "description": "When users attempt to upload files larger than 10MB through the document management UI, the upload appears to complete successfully (progress bar reaches 100%) but the file is not actually stored. No error message is shown.\n\nThe issue is in the multipart upload handler which has a hardcoded 10MB limit that silently truncates the stream.\n\nExpected: Show clear error message with file size limit, or support chunked uploads.",
+      "priority": "Medium",
+      "labels": ["file-upload", "ui", "backend"],
+      "components": ["Document Service"]
+    },
+    {
+      "summary": "Race condition in order processing causes duplicate charges",
+      "description": "Under high concurrency, the order processing service occasionally processes the same order twice, resulting in duplicate charges to customers. This happens when two instances of the order processor pick up the same message from the queue before the first one marks it as processed.\n\nOccurrence rate: ~0.1% of orders during peak hours\nFinancial impact: ~$5,000/month in duplicate charges requiring manual refunds",
+      "priority": "Critical",
+      "labels": ["race-condition", "payments", "backend"],
+      "components": ["Order Service"]
+    },
+    {
+      "summary": "Elasticsearch index corruption after rolling restart",
+      "description": "After performing a rolling restart of the Elasticsearch cluster, some indices become corrupted with missing shards. The cluster health turns yellow and search results become incomplete.\n\nAffected indices: products-*, user-activity-*\nCluster: production-es-cluster (3 nodes)\n\nWorkaround: Manually trigger shard reallocation via _cluster/reroute API",
+      "priority": "High",
+      "labels": ["elasticsearch", "infrastructure", "data-corruption"],
+      "components": ["Search Service"]
+    },
+    {
+      "summary": "Email notifications sent with wrong timezone offset",
+      "description": "Scheduled email notifications (daily digests, weekly reports) are being sent with UTC timestamps instead of the user's configured timezone. Users in PST see timestamps 8 hours ahead.\n\nThe bug is in NotificationScheduler.formatTimestamp() which ignores the user.timezone preference and defaults to UTC.\n\nAffected: All users with non-UTC timezone settings (~60% of user base)",
+      "priority": "Medium",
+      "labels": ["email", "timezone", "notifications"],
+      "components": ["Notification Service"]
+    },
+    {
+      "summary": "Kubernetes pod CrashLoopBackOff due to health check timeout",
+      "description": "The payment-service pods are entering CrashLoopBackOff state during deployment. The liveness probe is configured with a 5-second timeout, but the service takes 8-10 seconds to initialize the database connection pool on cold start.\n\nkubectl logs show: 'Connection pool initialization: waiting for 3 connections...'\nThen the pod is killed by kubelet before initialization completes.\n\nFix: Increase initialDelaySeconds from 10 to 30, or add a startup probe.",
+      "priority": "High",
+      "labels": ["kubernetes", "deployment", "infrastructure"],
+      "components": ["Payment Service"]
+    },
+    {
+      "summary": "GraphQL N+1 query problem in user profile resolver",
+      "description": "The user profile GraphQL resolver fetches related entities (orders, addresses, preferences) with individual database queries per user, causing severe N+1 query performance issues when listing multiple users.\n\nA query for 50 users triggers 150+ database queries. Page load time for admin user list: 12 seconds.\n\nSolution: Implement DataLoader batching for user-related resolvers.",
+      "priority": "Medium",
+      "labels": ["performance", "graphql", "database"],
+      "components": ["API Gateway"]
+    },
+    {
+      "summary": "CORS policy blocks requests from new subdomain",
+      "description": "After deploying the new marketing site to marketing.example.com, API requests from that subdomain are blocked by CORS policy. The Access-Control-Allow-Origin header only includes app.example.com and www.example.com.\n\nError in browser console: 'Access to XMLHttpRequest has been blocked by CORS policy: No Access-Control-Allow-Origin header'\n\nNeed to add marketing.example.com to the allowed origins list in api-gateway config.",
+      "priority": "Low",
+      "labels": ["cors", "api", "configuration"],
+      "components": ["API Gateway"]
+    },
+    {
+      "summary": "Password reset tokens not expiring after use",
+      "description": "Password reset tokens remain valid after being used to reset a password. A user (or attacker with access to the token) can reuse the same reset link multiple times to keep changing the password.\n\nThe token invalidation logic in PasswordResetService.completeReset() sets token.used=true but the validation check only looks at token.expiresAt.\n\nSecurity impact: Medium-High - requires access to reset email",
+      "priority": "High",
+      "labels": ["security", "authentication", "tokens"],
+      "components": ["Auth Service"]
+    },
+    {
+      "summary": "CSV export truncates data at 65,536 rows",
+      "description": "When exporting large datasets to CSV, the export is silently truncated at 65,536 rows (the old Excel .xls row limit). Users downloading transaction reports for large date ranges get incomplete data without any warning.\n\nThe issue is in CsvExporter.writeRows() which uses a 16-bit integer for the row counter.\n\nExpected: No artificial row limit for CSV exports, or at minimum a clear warning when data is truncated.",
+      "priority": "Medium",
+      "labels": ["export", "data-truncation", "backend"],
+      "components": ["Reporting Service"]
+    },
+    {
+      "summary": "Mobile app crashes on Android 14 when accessing camera",
+      "description": "The mobile application crashes with a SecurityException when attempting to access the camera on Android 14 devices. Android 14 introduced new photo/video permission model (READ_MEDIA_VISUAL_USER_SELECTED) that the app doesn't handle.\n\nCrash report: SecurityException: Permission denied (missing CAMERA permission)\nAffected: All Android 14+ users (~25% of Android user base)\n\nNeed to update targetSdk and implement the new photo picker API.",
+      "priority": "High",
+      "labels": ["mobile", "android", "crash", "permissions"],
+      "components": ["Mobile App"]
+    },
+    {
+      "summary": "Database connection pool exhaustion under load",
+      "description": "The user service database connection pool (HikariCP, max=20) is being exhausted during peak traffic, causing 'Connection is not available, request timed out after 30000ms' errors.\n\nMetrics show connections are held for an average of 5 seconds due to a slow JOIN query in UserRepository.findWithPermissions(). During peak (500 req/s), all 20 connections are occupied.\n\nOptions: Increase pool size, optimize the query, or add caching.",
+      "priority": "High",
+      "labels": ["database", "performance", "connection-pool"],
+      "components": ["User Service"]
+    },
+    {
+      "summary": "SSO login loop when IdP returns expired SAML assertion",
+      "description": "When the Identity Provider returns a SAML assertion with a NotOnOrAfter timestamp in the past (due to clock skew between IdP and SP), the application redirects back to the IdP, creating an infinite login loop.\n\nUsers see the login page flash repeatedly. The only workaround is clearing cookies.\n\nNeed to add clock skew tolerance (recommended: 2 minutes) to SAML assertion validation.",
+      "priority": "High",
+      "labels": ["sso", "saml", "authentication"],
+      "components": ["Auth Service"]
+    },
+    {
+      "summary": "Webhook delivery retries not respecting exponential backoff",
+      "description": "The webhook delivery system is supposed to retry failed deliveries with exponential backoff (1s, 2s, 4s, 8s...) but all retries are happening at 1-second intervals. This is causing unnecessary load on recipient servers and triggering rate limiting.\n\nBug is in WebhookRetryPolicy.getNextDelay() where Math.pow(2, retryCount) is called but the result is not used - it always returns the base delay.\n\nAffected: All webhook subscribers (~500 endpoints)",
+      "priority": "Medium",
+      "labels": ["webhooks", "retry-logic", "backend"],
+      "components": ["Integration Service"]
+    },
+    {
+      "summary": "Dark mode toggle doesn't persist across sessions",
+      "description": "When a user enables dark mode via the settings toggle, the preference is stored in component state but not persisted to localStorage or the user preferences API. On page refresh or new session, the app reverts to light mode.\n\nExpected: Dark mode preference should persist across sessions via the user preferences API and fall back to localStorage.",
+      "priority": "Low",
+      "labels": ["ui", "dark-mode", "frontend", "user-preferences"],
+      "components": ["Dashboard"]
+    },
+    {
+      "summary": "Audit log missing entries for bulk delete operations",
+      "description": "When users perform bulk delete operations (e.g., deleting multiple records from admin panel), only the first deletion is recorded in the audit log. The batch delete endpoint calls AuditLogger.log() inside a transaction that gets rolled back and re-executed for each item, but only commits the first log entry.\n\nCompliance impact: SOC2 requirement for complete audit trail is not met for bulk operations.",
+      "priority": "High",
+      "labels": ["audit-log", "compliance", "backend"],
+      "components": ["Admin Service"]
+    }
+  ],
+  "tasks": [
+    {
+      "summary": "Upgrade Node.js from 18.x to 20.x LTS",
+      "description": "Node.js 18 reaches EOL in April 2025. Need to upgrade all services to Node.js 20.x LTS. Requires testing all dependencies for compatibility.",
+      "priority": "Medium",
+      "labels": ["infrastructure", "upgrade"]
+    },
+    {
+      "summary": "Implement structured logging with correlation IDs",
+      "description": "Replace console.log statements with structured JSON logging. Add correlation ID propagation across microservices for distributed tracing.",
+      "priority": "Medium",
+      "labels": ["observability", "logging"]
+    }
+  ],
+  "stories": [
+    {
+      "summary": "As a user, I want to receive Slack notifications for critical alerts",
+      "description": "Integrate with Slack API to send real-time notifications when critical system alerts are triggered. Users should be able to configure which alert types they want to receive.",
+      "priority": "Medium",
+      "labels": ["feature", "notifications", "slack"]
+    },
+    {
+      "summary": "As an admin, I want to view system health dashboard",
+      "description": "Create a real-time dashboard showing system health metrics: uptime, error rates, response times, and resource utilization across all microservices.",
+      "priority": "High",
+      "labels": ["feature", "dashboard", "monitoring"]
+    }
+  ]
+}

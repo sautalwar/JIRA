@@ -1,0 +1,79 @@
+[
+  {
+    "source": "PagerDuty",
+    "title": "NullPointerException in UserAuthenticationService.authenticate()",
+    "description": "Users are reporting login failures. The auth-service is throwing NullPointerException when validating user sessions. The error occurs after the session cache TTL expires. Approximately 150 users affected in the last hour. This started after the 2:00 AM maintenance window.",
+    "severity": "critical",
+    "service": "auth-service",
+    "environment": "production",
+    "tags": {
+      "team": "platform",
+      "region": "us-east-1"
+    },
+    "timestamp": "2024-03-15T14:30:00Z",
+    "url": "https://pagerduty.com/incidents/PD-12345"
+  },
+  {
+    "source": "Datadog",
+    "title": "Memory usage exceeding threshold on notification-service",
+    "description": "Container memory usage has been steadily climbing and is now at 3.5GB (87.5% of 4GB limit). The rate of increase is approximately 100MB per hour. No recent code deployments. WebSocket connection count is abnormally high at 15,000 (normal: 2,000). Suspect memory leak in connection handler.",
+    "severity": "high",
+    "service": "notification-service",
+    "environment": "production",
+    "tags": {
+      "team": "messaging",
+      "cluster": "prod-us-east"
+    },
+    "metrics": {
+      "memory_usage_bytes": 3758096384,
+      "memory_limit_bytes": 4294967296,
+      "websocket_connections": 15000,
+      "memory_growth_rate_mb_per_hour": 100
+    },
+    "timestamp": "2024-03-15T15:00:00Z"
+  },
+  {
+    "source": "Sentry",
+    "title": "TypeError in chart-renderer.js on Safari 17.x",
+    "description": "New error cluster detected: TypeError: Cannot read properties of undefined (reading 'transform') at ChartRenderer.drawPath (chart-renderer.js:245). Only affecting Safari 17.x on macOS Sonoma. Chrome and Firefox work fine. Error count: 342 unique users in the last 24 hours. The D3.js SVG transform API behaves differently in Safari 17.",
+    "severity": "medium",
+    "service": "dashboard-frontend",
+    "environment": "production",
+    "tags": {
+      "browser": "Safari 17.2",
+      "os": "macOS 14.3",
+      "component": "charts"
+    },
+    "timestamp": "2024-03-15T10:00:00Z"
+  },
+  {
+    "source": "Prometheus",
+    "title": "Database connection pool exhaustion on user-service",
+    "description": "HikariCP connection pool on user-service is at 100% utilization (20/20 connections). Pending connection requests queued: 45. Average connection hold time: 8.2 seconds (threshold: 2s). The slow query identified is UserRepository.findWithPermissions() which performs multiple JOINs. Affecting response times for all user-related API endpoints.",
+    "severity": "high",
+    "service": "user-service",
+    "environment": "production",
+    "metrics": {
+      "pool_active_connections": 20,
+      "pool_max_connections": 20,
+      "pool_pending_requests": 45,
+      "avg_connection_hold_time_ms": 8200,
+      "p99_response_time_ms": 12000
+    },
+    "timestamp": "2024-03-15T16:00:00Z"
+  },
+  {
+    "source": "CloudWatch",
+    "title": "New API endpoint returning HTTP 500 on /api/v3/recommendations",
+    "description": "The recently deployed /api/v3/recommendations endpoint is returning HTTP 500 errors for 15% of requests. The error is 'TypeError: Cannot read property map of undefined' when the ML model returns an empty prediction array. The endpoint was deployed yesterday as part of the recommendation engine v2 rollout. This is a NEW issue not seen before.",
+    "severity": "high",
+    "service": "recommendation-api",
+    "environment": "production",
+    "tags": {
+      "version": "2.1.0",
+      "deployed_by": "ci-pipeline",
+      "deployment_id": "deploy-20240315"
+    },
+    "timestamp": "2024-03-15T13:45:00Z"
+  }
+]
