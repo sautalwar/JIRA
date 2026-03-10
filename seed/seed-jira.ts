@@ -81,32 +81,31 @@ async function ensureProject(): Promise<string> {
 }
 
 // ─── Get Issue Types ─────────────────────────────────────────────
-async function getIssueTypeId(projectId: string, typeName: string): Promise<string> {
+async function getProjectIssueTypes(projectKey: string): Promise<Record<string, string>> {
+  // Use the createmeta endpoint to get issue types available for this project
   const meta = (await jiraRequest(
-    `/issue/createmeta?projectIds=${projectId}&expand=projects.issuetypes`
+    `/issue/createmeta/${projectKey}/issuetypes`
   )) as any;
 
-  // Try createmeta first
-  if (meta.projects?.[0]?.issuetypes) {
-    const issueType = meta.projects[0].issuetypes.find(
-      (it: any) => it.name.toLowerCase() === typeName.toLowerCase()
-    );
-    if (issueType) return issueType.id;
+  const typeMap: Record<string, string> = {};
+
+  if (meta.issueTypes) {
+    for (const it of meta.issueTypes) {
+      typeMap[it.name.toLowerCase()] = it.id;
+      console.log(`   Found issue type: ${it.name} (${it.id})`);
+    }
   }
 
-  // Fallback: list all issue types
-  const types = (await jiraRequest("/issuetype")) as any;
-  const matchedType = (Array.isArray(types) ? types : []).find(
-    (it: any) => it.name.toLowerCase() === typeName.toLowerCase()
-  );
+  // If no Bug type, we'll use Task and add "bug" label
+  if (!typeMap["bug"] && typeMap["task"]) {
+    console.log(`   ⚠ No "Bug" issue type — will use "Task" with [Bug] label`);
+    typeMap["bug"] = typeMap["task"];
+  }
+  if (!typeMap["story"] && typeMap["task"]) {
+    typeMap["story"] = typeMap["task"];
+  }
 
-  if (matchedType) return matchedType.id;
-
-  // Default fallback: use "Bug" or first available
-  const bugType = (Array.isArray(types) ? types : []).find(
-    (it: any) => it.name.toLowerCase() === "bug"
-  );
-  return bugType?.id || "10001";
+  return typeMap;
 }
 
 // ─── Create Issue ────────────────────────────────────────────────
@@ -118,6 +117,16 @@ async function createIssue(
   priority: string,
   labels: string[]
 ): Promise<string> {
+  // Map priority names to JIRA-accepted values
+  const priorityMap: Record<string, string> = {
+    Critical: "Highest",
+    High: "High",
+    Medium: "Medium",
+    Low: "Low",
+    Lowest: "Lowest",
+  };
+  const mappedPriority = priorityMap[priority] || "Medium";
+
   const issue = await jiraRequest("/issue", "POST", {
     fields: {
       project: { key: projectKey },
@@ -133,7 +142,6 @@ async function createIssue(
           },
         ],
       },
-      priority: { name: priority },
       labels,
     },
   });
@@ -202,26 +210,28 @@ async function main() {
   // Ensure project exists
   const projectId = await ensureProject();
 
-  // Get issue type IDs
-  const bugTypeId = await getIssueTypeId(projectId, "Bug");
-  const taskTypeId = await getIssueTypeId(projectId, "Task");
-  const storyTypeId = await getIssueTypeId(projectId, "Story");
+  // Get available issue types for this project
+  const typeMap = await getProjectIssueTypes(PROJECT_KEY);
+  const bugTypeId = typeMap["bug"] || typeMap["task"] || "10041";
+  const taskTypeId = typeMap["task"] || "10041";
+  const storyTypeId = typeMap["story"] || typeMap["task"] || "10041";
 
-  console.log(`\n📝 Issue Type IDs: Bug=${bugTypeId}, Task=${taskTypeId}, Story=${storyTypeId}\n`);
+  console.log(`\n📝 Using Issue Types: Bug=${bugTypeId}, Task=${taskTypeId}, Story=${storyTypeId}\n`);
 
-  // Create bugs
+  // Create bugs (add "bug" label for identification)
   console.log("🐛 Creating bugs...\n");
   const createdBugs: string[] = [];
 
   for (const bug of sampleData.bugs) {
     try {
+      const bugLabels = [...bug.labels, "bug"];
       const key = await createIssue(
         PROJECT_KEY,
         bugTypeId,
         bug.summary,
         bug.description,
         bug.priority,
-        bug.labels
+        bugLabels
       );
       createdBugs.push(key);
       console.log(`   ✅ ${key}: ${bug.summary.substring(0, 60)}...`);

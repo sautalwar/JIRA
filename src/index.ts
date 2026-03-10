@@ -10,7 +10,7 @@ import inquirer from "inquirer";
 import chalk from "chalk";
 import ora from "ora";
 import { loadConfig, validateConfig } from "./config.js";
-import { analyzeAndTriage, batchAnalyze, type AnalysisInput } from "./analyzer.js";
+import { analyzeAndTriage, batchAnalyze, disconnectSession, type AnalysisInput } from "./analyzer.js";
 import { parseLogFile } from "./sources/log-parser.js";
 import { loadAlertsFromFile } from "./sources/alert-ingester.js";
 import { app } from "./sources/webhook-server.js";
@@ -184,9 +184,8 @@ program
 
       if (!proceed) continue;
 
-      const spinner = ora("Copilot SDK analyzing via JIRA MCP...").start();
+      console.log("  ⏳ Copilot SDK analyzing via JIRA MCP... (takes ~60s)");
       const result = await analyzeAndTriage(scenario);
-      spinner.stop();
 
       printResult(result);
 
@@ -204,6 +203,7 @@ program
     }
 
     console.log(chalk.bold.green("\n✅ Demo complete!\n"));
+    await disconnectSession();
   });
 
 // ─── Webhook Command ─────────────────────────────────────────────

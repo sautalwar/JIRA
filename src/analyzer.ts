@@ -8,7 +8,7 @@
  * 3. Create new bugs when no match is found
  */
 
-import { CopilotClient } from "@github/copilot-sdk";
+import { CopilotClient, approveAll } from "@github/copilot-sdk";
 import { loadConfig } from "./config.js";
 
 export interface AnalysisInput {
@@ -31,13 +31,16 @@ export interface AnalysisResult {
 /**
  * Creates a Copilot SDK session with JIRA MCP server integration
  */
+let _cachedSession: { client: any; session: any } | null = null;
+
 export async function createAnalyzerSession() {
+  if (_cachedSession) return _cachedSession;
+
   const config = loadConfig();
   const client = new CopilotClient();
 
   const session = await client.createSession({
-    model: "gpt-4o",
-    streaming: true,
+    onPermissionRequest: approveAll,
     mcpServers: {
       atlassian: {
         type: "local",
@@ -52,16 +55,21 @@ export async function createAnalyzerSession() {
           "jira_search",
           "jira_get_issue",
           "jira_create_issue",
-          "jira_update_issue",
-          "jira_add_comment",
-          "jira_list_projects",
         ],
-        timeout: 30000,
+        timeout: 60000,
       },
     },
   });
 
-  return { client, session };
+  _cachedSession = { client, session };
+  return _cachedSession;
+}
+
+export async function disconnectSession() {
+  if (_cachedSession) {
+    await _cachedSession.session.disconnect();
+    _cachedSession = null;
+  }
 }
 
 /**
@@ -78,13 +86,9 @@ export async function analyzeAndTriage(input: AnalysisInput): Promise<AnalysisRe
     const result = await session.sendAndWait({ prompt });
     const content = result?.data?.content || "";
 
-    // Parse the structured response from the model
     const analysisResult = parseAnalysisResponse(content, input);
-
-    await session.disconnect();
     return analysisResult;
   } catch (error) {
-    await session.disconnect();
     return {
       action: "error",
       reasoning: `Analysis failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -98,49 +102,28 @@ export async function analyzeAndTriage(input: AnalysisInput): Promise<AnalysisRe
  * and make a decision about whether to create a new bug.
  */
 function buildTriagePrompt(input: AnalysisInput, projectKey: string): string {
-  return `You are an intelligent bug triage assistant. Your job is to analyze incoming alerts and errors, search for existing JIRA issues that might match, and either link to an existing issue or create a new one.
+  return `You are a bug triage assistant. Search JIRA for an existing issue matching this alert, or create a new one.
 
-## Incoming Alert
+## Alert
+- **Source:** ${input.source}
+- **Title:** ${input.title}
+- **Severity:** ${input.severity}
+- **Description:** ${input.description}
 
-**Source:** ${input.source}
-**Title:** ${input.title}
-**Severity:** ${input.severity}
-**Description:**
-${input.description}
-${input.metadata ? `\n**Additional Metadata:**\n${Object.entries(input.metadata).map(([k, v]) => `- ${k}: ${v}`).join("\n")}` : ""}
-
-## Instructions
-
-1. **Search for existing issues:** Use the jira_search tool to search the ${projectKey} project for issues that might be related to this alert. Try multiple search queries:
-   - Search by key terms from the title
-   - Search by error type or component
-   - Search by related labels
-
-2. **Analyze matches:** For each potential match, compare:
-   - Error type / root cause similarity
-   - Affected component or service
-   - Stack trace or error message patterns
-   - Current issue status (is it already being worked on?)
-
-3. **Make a decision:**
-   - If you find a matching issue with **high confidence (>70%)**: Report it as an existing issue
-   - If you find a **partial match (40-70%)**: Report the potential match but recommend creating a new issue
-   - If **no match found (<40%)**: Create a new bug in JIRA using jira_create_issue
-
-4. **Response format:** Always end your response with a structured block:
+## Steps
+1. Use jira_search with JQL: \`project = ${projectKey} AND text ~ "KEYWORDS"\` where KEYWORDS are 2-3 key terms from the title. Do ONE search only.
+2. If a result looks like the same root cause, report it as existing.
+3. If no match, create a new issue with jira_create_issue in project ${projectKey} with issue type Task.
+4. End your response with exactly this block:
 
 \`\`\`result
 ACTION: [existing|created]
-ISSUE_KEY: [DEMO-XX]
+ISSUE_KEY: [${projectKey}-XX]
 CONFIDENCE: [0-100]
-REASONING: [One sentence explaining your decision]
+REASONING: [One sentence]
 \`\`\`
 
-## Important
-- When creating a new issue, set the project to ${projectKey}
-- Map severity to JIRA priority: critical→Highest, high→High, medium→Medium, low→Low
-- Add relevant labels based on the alert content
-- If creating a new issue, include the source system in the description`;
+Be concise. Do not search more than once.`;
 }
 
 /**
